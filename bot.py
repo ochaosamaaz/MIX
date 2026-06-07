@@ -8,14 +8,15 @@ import asyncio
 import logging
 import signal
 
-from telegram import Bot
-from telegram.ext import Application, ApplicationBuilder
+from telegram import Bot, Update
+from telegram.ext import Application, ApplicationBuilder, BaseHandler
 
 from config import settings
 from handlers import register_handlers
 from handlers.fx_handlers import register_fx_handlers
 from handlers.ask_handler import register_ask_handler
 from handlers.risk_calculator import register_risk_handler
+from handlers.force_join import check_force_join
 from scheduler import setup_scheduler
 
 # Configure logging

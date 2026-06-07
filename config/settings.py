@@ -29,6 +29,10 @@ class Settings:
     CHANNEL_ID: str = os.getenv("CHANNEL_ID", "")
     CHANNEL_LANGUAGE: str = os.getenv("CHANNEL_LANGUAGE", "en")
 
+    # Force Join — Users must join this channel to use the bot
+    # Set to channel username WITHOUT @ (e.g., "CielMarketNews")
+    FORCE_JOIN_CHANNEL: str = os.getenv("FORCE_JOIN_CHANNEL", "")
+
     # Schedule times (24h format)
     MORNING_HOUR: int = 7
     MORNING_MINUTE: int = 0

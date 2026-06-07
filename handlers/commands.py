@@ -16,6 +16,7 @@ from telegram.ext import (
 from config import settings
 from fetchers import fetch_crypto_news, fetch_stocks_news, fetch_forex_news
 from ai.llm import summarize_news, analyze_sentiment, format_sentiment_message
+from handlers.force_join import check_force_join, handle_check_joined
 from scheduler.jobs import (
     subscribe_user,
     unsubscribe_user,
@@ -45,6 +46,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - beautiful welcome with main menu."""
     chat_id = update.effective_chat.id
     lang = get_lang(chat_id)
+
+    # Check force join
+    if not await check_force_join(update, context):
+        return
 
     if lang == "id":
         welcome = (
@@ -118,6 +123,10 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     lang = get_lang(chat_id)
 
+    # Check force join
+    if not await check_force_join(update, context):
+        return
+
     text = (
         "📰 Pilih kategori pasar:" if lang == "id"
         else "📰 Choose a market category:"
@@ -147,6 +156,10 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     lang = get_lang(chat_id)
 
+    # Check force join
+    if not await check_force_join(update, context):
+        return
+
     text = (
         "📊 Pilih pasar untuk analisis sentimen:" if lang == "id"
         else "📊 Choose a market for sentiment analysis:"
@@ -175,6 +188,10 @@ async def tutorial_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /tutorial command - complete bot tutorial."""
     chat_id = update.effective_chat.id
     lang = get_lang(chat_id)
+
+    # Check force join
+    if not await check_force_join(update, context):
+        return
 
     keyboard = [
         [
@@ -406,6 +423,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = query.message.chat_id
     data = query.data
     lang = get_lang(chat_id)
+
+    # Handle "check_joined" callback (force join verification)
+    if data == "check_joined":
+        await handle_check_joined(update, context)
+        return
 
     # ── Menu navigation ──
     if data == "menu_back":
