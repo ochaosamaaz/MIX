@@ -341,7 +341,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 header = f"{cat_emoji.get(m, '📊')} *{m.upper()} NEWS*\n"
                 message_parts.append(f"{header}\n{summary}")
 
-        full_message = "\n\n{'━' * 20}\n\n".join(message_parts)
+        separator = "\n\n" + "━" * 20 + "\n\n"
+        full_message = separator.join(message_parts)
 
         # Split if too long
         if len(full_message) > 4000:
