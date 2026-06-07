@@ -13,6 +13,7 @@ from telegram.ext import Application, ApplicationBuilder
 
 from config import settings
 from handlers import register_handlers
+from handlers.fx_handlers import register_fx_handlers
 from scheduler import setup_scheduler
 
 # Configure logging
@@ -40,7 +41,10 @@ async def main():
     # Register command and message handlers
     register_handlers(app)
 
-    # Setup scheduled jobs (morning & evening market updates)
+    # Register FX trading feature handlers
+    register_fx_handlers(app)
+
+    # Setup scheduled jobs (market updates, FX signals, session updates, etc.)
     setup_scheduler(app)
 
     logger.info("Bot is running! Press Ctrl+C to stop.")
