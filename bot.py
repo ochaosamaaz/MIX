@@ -6,8 +6,10 @@ with AI-powered summarization and sentiment analysis.
 
 import asyncio
 import logging
+import signal
 
-from telegram.ext import Application
+from telegram import Bot
+from telegram.ext import Application, ApplicationBuilder
 
 from config import settings
 from handlers import register_handlers
@@ -33,7 +35,7 @@ async def main():
     logger.info("Starting AI Market News Bot...")
 
     # Build the application
-    app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).build()
 
     # Register command and message handlers
     register_handlers(app)
@@ -43,20 +45,32 @@ async def main():
 
     logger.info("Bot is running! Press Ctrl+C to stop.")
 
-    # Initialize, start polling, and idle
-    async with app:
-        await app.start()
-        await app.updater.start_polling(drop_pending_updates=True)
-        
-        # Keep running until interrupted
-        stop_event = asyncio.Event()
+    # Initialize and start
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(drop_pending_updates=True)
+
+    # Keep running until interrupted
+    stop_event = asyncio.Event()
+
+    # Handle signals for graceful shutdown
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
         try:
-            await stop_event.wait()
-        except (KeyboardInterrupt, SystemExit):
+            loop.add_signal_handler(sig, stop_event.set)
+        except NotImplementedError:
+            # Windows doesn't support add_signal_handler
             pass
-        finally:
-            await app.updater.stop()
-            await app.stop()
+
+    try:
+        await stop_event.wait()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        logger.info("Shutting down bot...")
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
 
 
 if __name__ == "__main__":
