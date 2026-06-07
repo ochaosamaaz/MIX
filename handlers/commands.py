@@ -328,18 +328,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         message_parts = []
         for m in markets_to_fetch:
-            data_result = await _fetch_market(m)
-            articles = data_result.get("articles", [])
-            summary = await summarize_news(articles, m, lang)
+            try:
+                data_result = await _fetch_market(m)
+                articles = data_result.get("articles", [])
+                summary = await summarize_news(articles, m, lang)
 
-            # Add price info for crypto
-            if m == "crypto" and data_result.get("prices"):
-                price_text = _format_prices(data_result["prices"])
-                message_parts.append(f"{price_text}\n\n{summary}")
-            else:
+                # Add price info for crypto
+                if m == "crypto" and data_result.get("prices"):
+                    price_text = _format_prices(data_result["prices"])
+                    message_parts.append(f"{price_text}\n\n{summary}")
+                else:
+                    cat_emoji = {"crypto": "🪙", "stocks": "📈", "forex": "💱"}
+                    header = f"{cat_emoji.get(m, '📊')} {m.upper()} NEWS\n"
+                    message_parts.append(f"{header}\n{summary}")
+            except Exception as e:
+                logger.error(f"Error processing {m} news: {e}")
                 cat_emoji = {"crypto": "🪙", "stocks": "📈", "forex": "💱"}
-                header = f"{cat_emoji.get(m, '📊')} *{m.upper()} NEWS*\n"
-                message_parts.append(f"{header}\n{summary}")
+                message_parts.append(
+                    f"{cat_emoji.get(m, '📊')} {m.upper()} NEWS\n\n"
+                    f"⚠️ Error fetching {m} news. Please try again later."
+                )
 
         separator = "\n\n" + "━" * 20 + "\n\n"
         full_message = separator.join(message_parts)
@@ -347,13 +355,29 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Split if too long
         if len(full_message) > 4000:
             for part in message_parts:
-                await context.bot.send_message(
-                    chat_id=chat_id, text=part, parse_mode="Markdown"
-                )
+                try:
+                    await context.bot.send_message(
+                        chat_id=chat_id, text=part
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending message: {e}")
             # Delete the loading message
-            await query.message.delete()
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
         else:
-            await query.edit_message_text(full_message, parse_mode="Markdown")
+            try:
+                await query.edit_message_text(full_message)
+            except Exception as e:
+                logger.error(f"Error editing message with Markdown: {e}")
+                # Retry without parse_mode if Markdown fails
+                try:
+                    await query.edit_message_text(full_message)
+                except Exception:
+                    await query.edit_message_text(
+                        "⚠️ Error displaying news. Please try /news again."
+                    )
         return
 
     # Sentiment requests
@@ -371,14 +395,24 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         message_parts = []
         for m in markets_to_analyze:
-            data_result = await _fetch_market(m)
-            articles = data_result.get("articles", [])
-            sentiment = await analyze_sentiment(articles, m, lang)
-            sentiment_msg = format_sentiment_message(sentiment, m)
-            message_parts.append(sentiment_msg)
+            try:
+                data_result = await _fetch_market(m)
+                articles = data_result.get("articles", [])
+                sentiment = await analyze_sentiment(articles, m, lang)
+                sentiment_msg = format_sentiment_message(sentiment, m)
+                message_parts.append(sentiment_msg)
+            except Exception as e:
+                logger.error(f"Error analyzing {m} sentiment: {e}")
+                message_parts.append(f"⚠️ Error analyzing {m} sentiment.")
 
         full_message = "\n".join(message_parts)
-        await query.edit_message_text(full_message, parse_mode="Markdown")
+        try:
+            await query.edit_message_text(full_message)
+        except Exception as e:
+            logger.error(f"Error sending sentiment: {e}")
+            await query.edit_message_text(
+                "⚠️ Error displaying sentiment. Please try /sentiment again."
+            )
         return
 
 
