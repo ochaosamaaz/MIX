@@ -4,7 +4,9 @@ Telegram bot for Crypto, US Stocks, and Forex news
 with AI-powered summarization and sentiment analysis.
 """
 
+import asyncio
 import logging
+
 from telegram.ext import Application
 
 from config import settings
@@ -19,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def main():
+async def main():
     """Start the bot."""
     # Validate settings
     missing = settings.validate()
@@ -41,9 +43,24 @@ def main():
 
     logger.info("Bot is running! Press Ctrl+C to stop.")
 
-    # Start polling for updates
-    app.run_polling(drop_pending_updates=True)
+    # Initialize, start polling, and idle
+    async with app:
+        await app.start()
+        await app.updater.start_polling(drop_pending_updates=True)
+        
+        # Keep running until interrupted
+        stop_event = asyncio.Event()
+        try:
+            await stop_event.wait()
+        except (KeyboardInterrupt, SystemExit):
+            pass
+        finally:
+            await app.updater.stop()
+            await app.stop()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Bot stopped.")
