@@ -14,6 +14,8 @@ from telegram.ext import Application, ApplicationBuilder
 from config import settings
 from handlers import register_handlers
 from handlers.fx_handlers import register_fx_handlers
+from handlers.ask_handler import register_ask_handler
+from handlers.risk_calculator import register_risk_handler
 from scheduler import setup_scheduler
 
 # Configure logging
@@ -43,6 +45,12 @@ async def main():
 
     # Register FX trading feature handlers
     register_fx_handlers(app)
+
+    # Register Ask AI handler
+    register_ask_handler(app)
+
+    # Register Risk Calculator handler
+    register_risk_handler(app)
 
     # Setup scheduled jobs (market updates, FX signals, session updates, etc.)
     setup_scheduler(app)
