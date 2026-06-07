@@ -24,6 +24,11 @@ class Settings:
     # Language
     DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "en")
 
+    # Channel (for auto-posting updates to a Telegram channel)
+    # Can be @channel_username or numeric channel ID (e.g., -1001234567890)
+    CHANNEL_ID: str = os.getenv("CHANNEL_ID", "")
+    CHANNEL_LANGUAGE: str = os.getenv("CHANNEL_LANGUAGE", "en")
+
     # Schedule times (24h format)
     MORNING_HOUR: int = 7
     MORNING_MINUTE: int = 0

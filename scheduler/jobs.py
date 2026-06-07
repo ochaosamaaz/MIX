@@ -16,6 +16,15 @@ from fetchers.fx_signals import generate_fx_signal, format_signal_message
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update
 from ai.llm import summarize_news, analyze_sentiment, format_sentiment_message
+from scheduler.channel import (
+    channel_morning_update,
+    channel_evening_update,
+    channel_fx_signal,
+    channel_session_update,
+    channel_us_news_alert,
+    channel_us_news_review,
+    channel_weekly_analysis,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,9 +146,12 @@ async def send_market_update(context: ContextTypes.DEFAULT_TYPE, period: str = "
 # ─────────────────────────────────────────────
 async def send_daily_fx_signal(context: ContextTypes.DEFAULT_TYPE):
     """
-    Send daily FX signal to all subscribers.
+    Send daily FX signal to all subscribers + channel.
     Scheduled for market open times.
     """
+    # Post to channel first
+    await channel_fx_signal(context)
+
     if not subscribers:
         logger.info("No subscribers for FX signal. Skipping.")
         return
@@ -183,8 +195,11 @@ async def send_daily_fx_signal(context: ContextTypes.DEFAULT_TYPE):
 async def send_session_update(context: ContextTypes.DEFAULT_TYPE):
     """
     Send session update based on current time.
-    Auto-detects which session is opening.
+    Auto-detects which session is opening. Posts to channel + subscribers.
     """
+    # Post to channel first
+    await channel_session_update(context)
+
     if not subscribers:
         logger.info("No subscribers for session update. Skipping.")
         return
@@ -220,9 +235,12 @@ async def send_session_update(context: ContextTypes.DEFAULT_TYPE):
 # ─────────────────────────────────────────────
 async def send_us_news_alert(context: ContextTypes.DEFAULT_TYPE):
     """
-    Send US economic news alert to subscribers.
+    Send US economic news alert to subscribers + channel.
     Scheduled before major data releases.
     """
+    # Post to channel first
+    await channel_us_news_alert(context)
+
     if not subscribers:
         logger.info("No subscribers for US news alert. Skipping.")
         return
@@ -252,9 +270,12 @@ async def send_us_news_alert(context: ContextTypes.DEFAULT_TYPE):
 # ─────────────────────────────────────────────
 async def send_weekly_analysis(context: ContextTypes.DEFAULT_TYPE):
     """
-    Send weekly market analysis to subscribers.
+    Send weekly market analysis to subscribers + channel.
     Scheduled for Sunday evening / Monday morning.
     """
+    # Post to channel first
+    await channel_weekly_analysis(context)
+
     if not subscribers:
         logger.info("No subscribers for weekly analysis. Skipping.")
         return
@@ -283,13 +304,15 @@ async def send_weekly_analysis(context: ContextTypes.DEFAULT_TYPE):
 # Scheduled job wrappers
 # ─────────────────────────────────────────────
 async def morning_update(context: ContextTypes.DEFAULT_TYPE):
-    """Morning scheduled job."""
+    """Morning scheduled job — sends to subscribers + channel."""
     await send_market_update(context, period="morning")
+    await channel_morning_update(context)
 
 
 async def evening_update(context: ContextTypes.DEFAULT_TYPE):
-    """Evening scheduled job."""
+    """Evening scheduled job — sends to subscribers + channel."""
     await send_market_update(context, period="evening")
+    await channel_evening_update(context)
 
 
 # ─────────────────────────────────────────────
