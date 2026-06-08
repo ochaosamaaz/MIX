@@ -13,6 +13,7 @@ from telegram.ext import Application, ContextTypes
 from config import settings
 from fetchers import fetch_crypto_news, fetch_stocks_news, fetch_forex_news
 from fetchers.fx_signals import generate_quantum_signal, format_quantum_signal
+from scheduler.signal_monitor import add_active_signal, check_signals
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update
 from ai.llm import summarize_news, analyze_sentiment, format_sentiment_message
@@ -163,6 +164,9 @@ async def send_quantum_fx_signal(context: ContextTypes.DEFAULT_TYPE):
 
     # Generate signal once for English
     signal_en = await generate_quantum_signal(session=session, language="en")
+
+    # Track signal for TP/SL monitoring
+    add_active_signal(signal_en)
 
     for chat_id, prefs in list(subscribers.items()):
         if not prefs.get("fx_signals", True):
@@ -443,3 +447,12 @@ def setup_scheduler(app: Application):
         name="weekly_analysis",
     )
     logger.info("Scheduled: Weekly analysis on Sunday at 20:00 WIB")
+
+    # ── Signal TP/SL Monitor (every 5 minutes) ──
+    app.job_queue.run_repeating(
+        check_signals,
+        interval=300,  # 5 minutes
+        first=60,  # Start after 1 minute
+        name="signal_monitor",
+    )
+    logger.info("Scheduled: Signal TP/SL monitor (every 5 minutes)")
