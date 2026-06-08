@@ -13,7 +13,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from fetchers.fx_signals import generate_quantum_signal, format_quantum_signal
+from fetchers.fx_signals import generate_quantum_signal, generate_pair_quantum_signal, format_quantum_signal
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update, get_all_sessions_summary
 from handlers.commands import get_lang
@@ -25,26 +25,98 @@ logger = logging.getLogger(__name__)
 # /signal command - Quantum Physics FX Signal
 # ─────────────────────────────────────────────
 async def signal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /signal command - generate Quantum Physics FX signal."""
+    """
+    Handle /signal command - generate Quantum Physics FX signal.
+
+    Usage:
+      /signal         → Auto-detect current session, generate signal
+      /signal EURUSD  → Generate signal for specific pair
+      /signal XAUUSD  → Generate signal for Gold
+    """
     chat_id = update.effective_chat.id
     lang = get_lang(chat_id)
 
-    # Show session selection
-    text = (
-        "⚛️ Quantum Signal - Pilih sesi:" if lang == "id"
-        else "⚛️ Quantum Signal - Choose session:"
+    # Check if user specified a pair
+    if context.args and len(context.args) >= 1:
+        pair_input = context.args[0].upper().replace("/", "")
+        # Format pair properly
+        if len(pair_input) == 6:
+            pair = f"{pair_input[:3]}/{pair_input[3:]}"
+        elif "XAU" in pair_input:
+            pair = "XAU/USD"
+        else:
+            pair = pair_input
+
+        loading_text = (
+            f"⚛️ Analyzing Quantum setup for {pair}..." if lang == "en"
+            else f"⚛️ Menganalisis setup Quantum untuk {pair}..."
+        )
+        loading_msg = await update.message.reply_text(loading_text)
+
+        try:
+            signal = await generate_pair_quantum_signal(pair=pair, language=lang)
+            message = format_quantum_signal(signal)
+
+            if len(message) > 4000:
+                chunks = _split_message(message)
+                await loading_msg.edit_text(chunks[0])
+                for chunk in chunks[1:]:
+                    await update.message.reply_text(chunk)
+            else:
+                await loading_msg.edit_text(message)
+        except Exception as e:
+            logger.error(f"Error generating signal for {pair}: {e}")
+            await loading_msg.edit_text(
+                f"⚠️ Failed to generate signal for {pair}. Try again later."
+            )
+        return
+
+    # No args → auto-detect current session
+    current_session = _get_current_session()
+
+    loading_text = (
+        f"⚛️ Generating Quantum signal for {current_session.title()} session..." if lang == "en"
+        else f"⚛️ Membuat sinyal Quantum untuk sesi {current_session.title()}..."
     )
+    loading_msg = await update.message.reply_text(loading_text)
 
-    keyboard = [
-        [
-            InlineKeyboardButton("🌏 Asian", callback_data="qsig_asian"),
-            InlineKeyboardButton("🇬🇧 London", callback_data="qsig_london"),
-            InlineKeyboardButton("🇺🇸 New York", callback_data="qsig_newyork"),
-        ],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    try:
+        signal = await generate_quantum_signal(session=current_session, language=lang)
+        message = format_quantum_signal(signal)
 
-    await update.message.reply_text(text, reply_markup=reply_markup)
+        if len(message) > 4000:
+            chunks = _split_message(message)
+            await loading_msg.edit_text(chunks[0])
+            for chunk in chunks[1:]:
+                await update.message.reply_text(chunk)
+        else:
+            await loading_msg.edit_text(message)
+    except Exception as e:
+        logger.error(f"Error generating quantum signal: {e}")
+        await loading_msg.edit_text(
+            "⚠️ Failed to generate signal. Try again later."
+        )
+
+
+def _get_current_session() -> str:
+    """
+    Auto-detect which trading session is currently active based on WIB time.
+    Asian: 07:00 - 14:00 WIB
+    London: 14:00 - 19:30 WIB
+    New York: 19:30 - 04:00 WIB
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    now = datetime.now(ZoneInfo("Asia/Jakarta"))
+    hour = now.hour
+
+    if 7 <= hour < 14:
+        return "asian"
+    elif 14 <= hour < 20:
+        return "london"
+    else:
+        return "newyork"
 
 
 # ─────────────────────────────────────────────

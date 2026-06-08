@@ -312,7 +312,8 @@ def format_quantum_signal(signal: dict) -> str:
     pair = signal["pair"]
     bias = signal["bias"]
     direction = signal["direction"]
-    session = signal.get("session", "unknown").upper()
+    session = signal.get("session", "auto").upper()
+    is_prob_report = signal.get("is_probability_report", False)
 
     # Determine decimal format
     if "JPY" in pair.upper():
@@ -334,12 +335,29 @@ def format_quantum_signal(signal: dict) -> str:
         conf_bar = "🔥🔥🔥 HIGH"
     elif conf >= 65:
         conf_bar = "🔥🔥 MEDIUM"
-    else:
+    elif conf >= 45:
         conf_bar = "🔥 LOW"
+    else:
+        conf_bar = "⚪ WAIT"
 
     # Session emoji
-    session_emojis = {"ASIAN": "🌏", "LONDON": "🇬🇧", "NEWYORK": "🇺🇸"}
+    session_emojis = {"ASIAN": "🌏", "LONDON": "🇬🇧", "NEWYORK": "🇺🇸", "AUTO": "🔄"}
     sess_emoji = session_emojis.get(session, "🌐")
+
+    # Header — different for probability report
+    if is_prob_report:
+        header = (
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚛️ QUANTUM ANALYSIS — {pair}\n"
+            f"📊 PROBABILITY REPORT\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        )
+    else:
+        header = (
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚛️ QUANTUM SIGNAL {sess_emoji} {session}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        )
 
     # Build entry section
     entry_text = f"▶️ Entry: {signal['entry']:{fmt}} ({signal['entry_name']})"
@@ -355,9 +373,7 @@ def format_quantum_signal(signal: dict) -> str:
             pivot_note = "⚠️ Pivot entry INVALID (Open above Pivot)"
 
     msg = (
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚛️ QUANTUM SIGNAL {sess_emoji} {session}\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{header}"
         f"💱 Pair: {pair}\n"
         f"📊 Direction: {dir_emoji}\n"
         f"⚛️ Quantum Bias: {bias_emoji}\n"
@@ -367,6 +383,16 @@ def format_quantum_signal(signal: dict) -> str:
         f"📍 Open: {signal['open_price']:{fmt}}\n"
         f"📍 Prev Open: {signal['prev_open']:{fmt}}\n"
         f"{'Open < Prev Open → Sweep PDL ⬇️' if bias == 'DOWN' else 'Open > Prev Open → Sweep PDH ⬆️'}\n\n"
+    )
+
+    # For probability report, show the issue
+    if is_prob_report:
+        msg += (
+            f"━━ ⚠️ SETUP STATUS ━━\n"
+            f"📋 {signal.get('invalidation_reason', 'Setup not fully valid.')}\n\n"
+        )
+
+    msg += (
         f"━━ ENTRY & LEVELS ━━\n"
         f"{entry_text}\n"
         f"🛑 Stop Loss: {signal['stop_loss']:{fmt}}\n"
@@ -386,11 +412,148 @@ def format_quantum_signal(signal: dict) -> str:
         f"📊 PDH: {signal['pdh']:{fmt}} | PDL: {signal['pdl']:{fmt}}\n\n"
         f"━━ ANALYSIS ━━\n"
         f"📝 {signal['analysis']}\n\n"
-        f"💡 After {signal['mission']}, watch for\n"
-        f"structure shift & trend continuation.\n\n"
+    )
+
+    if is_prob_report:
+        msg += (
+            f"💡 Recommendation: WAIT for price to\n"
+            f"reach entry level before executing.\n"
+            f"Monitor structure for confirmation.\n\n"
+        )
+    else:
+        msg += (
+            f"💡 After {signal['mission']}, watch for\n"
+            f"structure shift & trend continuation.\n\n"
+        )
+
+    msg += (
         f"⚠️ AI-generated signal. Not financial advice.\n"
         f"Always manage your risk!\n"
         f"━━━━━━━━━━━━━━━━━━━━"
     )
 
     return msg
+
+
+
+async def generate_pair_quantum_signal(pair: str, language: str = "en") -> dict:
+    """
+    Generate Quantum signal for a SPECIFIC pair.
+    If quantum theory is valid → full signal.
+    If not valid → show probability + explanation why no setup.
+
+    Args:
+        pair: Currency pair (e.g., "XAU/USD", "EUR/USD")
+        language: 'en' or 'id'
+
+    Returns:
+        Dict with signal details or probability report
+    """
+    try:
+        pivots = await get_pivot_points(pair)
+        if pivots.get("error"):
+            return {
+                "error": True,
+                "message": f"Cannot fetch data for {pair}. Please try again.",
+            }
+
+        # Analyze quantum bias
+        analysis = _analyze_quantum_bias(pivots)
+
+        # Check if setup is valid
+        if not analysis["valid_entry"] or not analysis["entry_levels"]:
+            # No valid quantum setup — return probability report
+            return _build_probability_report(analysis, pivots, language)
+
+        # Valid setup exists — get AI confirmation
+        signal = await _ai_refine_signal(analysis, "auto", language)
+        return signal
+
+    except Exception as e:
+        logger.error(f"Error generating pair signal for {pair}: {e}")
+        return {
+            "error": True,
+            "message": f"Error analyzing {pair}: {str(e)[:100]}",
+        }
+
+
+def _build_probability_report(analysis: dict, pivots: dict, language: str) -> dict:
+    """
+    Build a probability report when quantum setup is not fully valid.
+    Shows the bias, why entry is invalid, and probability of move.
+    """
+    pair = analysis["pair"]
+    bias = analysis["bias"]
+    direction = analysis["direction"]
+    pivot_valid = analysis["pivot_valid"]
+    confidence = analysis["confidence_score"]
+
+    # Adjust confidence down because setup isn't clean
+    adjusted_confidence = max(30, confidence - 20)
+
+    # Determine why setup isn't ideal
+    if not pivot_valid:
+        if bias == "DOWN":
+            invalidation_reason = (
+                "Open is BELOW Pivot — price already past the entry zone. "
+                "Pivot entry is invalid. R1 is the only valid sell level, "
+                "but price needs to retrace up first."
+            )
+            invalidation_reason_id = (
+                "Open sudah di BAWAH Pivot — harga sudah melewati zona entry. "
+                "Entry di Pivot invalid. R1 satu-satunya level sell yang valid, "
+                "tapi harga harus retrace naik dulu."
+            )
+        else:
+            invalidation_reason = (
+                "Open is ABOVE Pivot — price already past the entry zone. "
+                "Pivot entry is invalid. S1 is the only valid buy level, "
+                "but price needs to retrace down first."
+            )
+            invalidation_reason_id = (
+                "Open sudah di ATAS Pivot — harga sudah melewati zona entry. "
+                "Entry di Pivot invalid. S1 satu-satunya level buy yang valid, "
+                "tapi harga harus retrace turun dulu."
+            )
+    else:
+        invalidation_reason = "Setup conditions are partially met but not ideal for entry."
+        invalidation_reason_id = "Kondisi setup terpenuhi sebagian tapi belum ideal untuk entry."
+
+    # Build the report as a signal-like dict but with probability focus
+    return {
+        "pair": pair,
+        "session": "auto",
+        "bias": bias,
+        "mission": analysis["mission"],
+        "direction": direction,
+        "entry": analysis["primary_entry"],
+        "entry_name": analysis["entry_levels"][0]["name"] if analysis["entry_levels"] else "N/A",
+        "alt_entry": analysis["entry_levels"][1]["level"] if len(analysis["entry_levels"]) > 1 else None,
+        "alt_entry_name": analysis["entry_levels"][1]["name"] if len(analysis["entry_levels"]) > 1 else None,
+        "stop_loss": analysis["sl"],
+        "tp1": analysis["tp1"],
+        "tp2": analysis["tp2"],
+        "tp3": analysis["tp3"],
+        "pivot": pivots["pivot"],
+        "r1": pivots["r1"],
+        "s1": pivots["s1"],
+        "pdh": pivots["pdh"],
+        "pdl": pivots["pdl"],
+        "pivot_valid": pivot_valid,
+        "confidence_score": adjusted_confidence,
+        "is_probability_report": True,
+        "invalidation_reason": invalidation_reason if language == "en" else invalidation_reason_id,
+        "analysis": (
+            f"Quantum bias: {bias}. {analysis['mission']} expected. "
+            f"However, current price position makes the ideal entry zone less accessible. "
+            f"Wait for price to retrace to entry level before acting."
+            if language == "en"
+            else f"Bias quantum: {bias}. {analysis['mission']} diperkirakan terjadi. "
+            f"Namun, posisi harga saat ini membuat zona entry ideal kurang terjangkau. "
+            f"Tunggu harga retrace ke level entry sebelum eksekusi."
+        ),
+        "open_price": analysis["open_price"],
+        "prev_open": analysis["prev_open"],
+        "generated_at": datetime.utcnow().isoformat(),
+        "error": False,
+    }
