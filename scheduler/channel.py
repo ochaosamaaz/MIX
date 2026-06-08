@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 
 from config import settings
 from fetchers import fetch_crypto_news, fetch_stocks_news, fetch_forex_news
-from fetchers.fx_signals import generate_fx_signal, format_signal_message
+from fetchers.fx_signals import generate_quantum_signal, format_quantum_signal
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update, get_all_sessions_summary
 from ai.llm import summarize_news, analyze_sentiment, format_sentiment_message
@@ -152,31 +152,25 @@ async def channel_evening_update(context: ContextTypes.DEFAULT_TYPE):
 
 
 # ─────────────────────────────────────────────
-# Channel: FX Signal
+# Channel: Quantum FX Signal
 # ─────────────────────────────────────────────
-async def channel_fx_signal(context: ContextTypes.DEFAULT_TYPE):
-    """Post daily FX signal to channel."""
+async def channel_quantum_signal(context: ContextTypes.DEFAULT_TYPE, session: str = "london"):
+    """Post Quantum Physics FX signal to channel."""
     channel_id = _get_channel_id()
     if not channel_id:
         return
 
     lang = _get_channel_language()
-    logger.info("Posting FX signal to channel...")
+    logger.info(f"Posting Quantum {session} signal to channel...")
 
     try:
-        forex_data = await fetch_forex_news(limit=5)
-        news_context = "\n".join(
-            f"- {a['title']}: {a.get('description', '')}"
-            for a in forex_data.get("articles", [])
-        )
-
-        signal = await generate_fx_signal(news_context=news_context, language=lang)
-        message = format_signal_message(signal)
+        signal = await generate_quantum_signal(session=session, language=lang)
+        message = format_quantum_signal(signal)
 
         await _send_to_channel(context, message)
 
     except Exception as e:
-        logger.error(f"Error posting FX signal to channel: {e}")
+        logger.error(f"Error posting Quantum signal to channel: {e}")
 
 
 # ─────────────────────────────────────────────

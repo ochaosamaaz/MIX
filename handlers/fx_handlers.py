@@ -13,48 +13,38 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from fetchers.fx_signals import generate_fx_signal, format_signal_message
+from fetchers.fx_signals import generate_quantum_signal, format_quantum_signal
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update, get_all_sessions_summary
-from fetchers.forex import fetch_forex_news
 from handlers.commands import get_lang
 
 logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────
-# /signal command - FX Signal Harian
+# /signal command - Quantum Physics FX Signal
 # ─────────────────────────────────────────────
 async def signal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /signal command - generate FX trading signal."""
+    """Handle /signal command - generate Quantum Physics FX signal."""
     chat_id = update.effective_chat.id
     lang = get_lang(chat_id)
 
-    loading_text = (
-        "⏳ Generating FX signal..." if lang == "en"
-        else "⏳ Membuat sinyal FX..."
+    # Show session selection
+    text = (
+        "⚛️ Quantum Signal - Pilih sesi:" if lang == "id"
+        else "⚛️ Quantum Signal - Choose session:"
     )
-    loading_msg = await update.message.reply_text(loading_text)
 
-    try:
-        # Fetch forex news for context
-        forex_data = await fetch_forex_news(limit=5)
-        news_context = "\n".join(
-            f"- {a['title']}: {a.get('description', '')}"
-            for a in forex_data.get("articles", [])
-        )
+    keyboard = [
+        [
+            InlineKeyboardButton("🌏 Asian", callback_data="qsig_asian"),
+            InlineKeyboardButton("🇬🇧 London", callback_data="qsig_london"),
+            InlineKeyboardButton("🇺🇸 New York", callback_data="qsig_newyork"),
+        ],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Generate signal
-        signal = await generate_fx_signal(news_context=news_context, language=lang)
-        message = format_signal_message(signal)
-
-        await loading_msg.edit_text(message)
-
-    except Exception as e:
-        logger.error(f"Error in /signal command: {e}")
-        await loading_msg.edit_text(
-            "⚠️ Failed to generate signal. Please try again later."
-        )
+    await update.message.reply_text(text, reply_markup=reply_markup)
 
 
 # ─────────────────────────────────────────────
@@ -186,6 +176,33 @@ async def fx_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     chat_id = query.message.chat_id
     data = query.data
     lang = get_lang(chat_id)
+
+    # Quantum Signal callbacks
+    if data.startswith("qsig_"):
+        session = data.replace("qsig_", "")
+        loading_text = (
+            f"⚛️ Generating Quantum {session.title()} signal..." if lang == "en"
+            else f"⚛️ Membuat sinyal Quantum {session.title()}..."
+        )
+        await query.edit_message_text(loading_text)
+
+        try:
+            signal = await generate_quantum_signal(session=session, language=lang)
+            message = format_quantum_signal(signal)
+
+            if len(message) > 4000:
+                chunks = _split_message(message)
+                await query.edit_message_text(chunks[0])
+                for chunk in chunks[1:]:
+                    await context.bot.send_message(chat_id=chat_id, text=chunk)
+            else:
+                await query.edit_message_text(message)
+        except Exception as e:
+            logger.error(f"Error generating quantum signal: {e}")
+            await query.edit_message_text(
+                "⚠️ Failed to generate signal. Try /signal again."
+            )
+        return
 
     # US News callbacks
     if data == "fx_usnews_alert":

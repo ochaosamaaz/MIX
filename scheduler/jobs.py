@@ -12,14 +12,14 @@ from telegram.ext import Application, ContextTypes
 
 from config import settings
 from fetchers import fetch_crypto_news, fetch_stocks_news, fetch_forex_news
-from fetchers.fx_signals import generate_fx_signal, format_signal_message
+from fetchers.fx_signals import generate_quantum_signal, format_quantum_signal
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update
 from ai.llm import summarize_news, analyze_sentiment, format_sentiment_message
 from scheduler.channel import (
     channel_morning_update,
     channel_evening_update,
-    channel_fx_signal,
+    channel_quantum_signal,
     channel_session_update,
     channel_us_news_alert,
     channel_us_news_review,
@@ -142,31 +142,27 @@ async def send_market_update(context: ContextTypes.DEFAULT_TYPE, period: str = "
 
 
 # ─────────────────────────────────────────────
-# FX Signal Job (NEW)
+# FX Quantum Signal Jobs (3x/day per session)
 # ─────────────────────────────────────────────
-async def send_daily_fx_signal(context: ContextTypes.DEFAULT_TYPE):
+async def send_quantum_fx_signal(context: ContextTypes.DEFAULT_TYPE):
     """
-    Send daily FX signal to all subscribers + channel.
-    Scheduled for market open times.
+    Send Quantum Physics FX signal for the current session.
+    Posts to channel + subscribers.
     """
+    # Determine session from job data
+    session = context.job.data if context.job.data else "london"
+
     # Post to channel first
-    await channel_fx_signal(context)
+    await channel_quantum_signal(context, session)
 
     if not subscribers:
-        logger.info("No subscribers for FX signal. Skipping.")
+        logger.info(f"No subscribers for {session} quantum signal. Skipping.")
         return
 
-    logger.info(f"Generating daily FX signal for {len(subscribers)} subscribers...")
+    logger.info(f"Generating {session} quantum signal for {len(subscribers)} subscribers...")
 
-    # Fetch forex news context once
-    forex_data = await fetch_forex_news(limit=5)
-    news_context = "\n".join(
-        f"- {a['title']}: {a.get('description', '')}"
-        for a in forex_data.get("articles", [])
-    )
-
-    # Generate signal once (same signal for all users)
-    signal = await generate_fx_signal(news_context=news_context, language="en")
+    # Generate signal once for English
+    signal_en = await generate_quantum_signal(session=session, language="en")
 
     for chat_id, prefs in list(subscribers.items()):
         if not prefs.get("fx_signals", True):
@@ -175,18 +171,23 @@ async def send_daily_fx_signal(context: ContextTypes.DEFAULT_TYPE):
         try:
             language = prefs["language"]
 
-            # If user wants Indonesian, regenerate with ID language
             if language == "id":
-                signal_id = await generate_fx_signal(news_context=news_context, language="id")
-                message = format_signal_message(signal_id)
+                signal_id = await generate_quantum_signal(session=session, language="id")
+                message = format_quantum_signal(signal_id)
             else:
-                message = format_signal_message(signal)
+                message = format_quantum_signal(signal_en)
 
-            await context.bot.send_message(chat_id=chat_id, text=message)
-            logger.info(f"Sent FX signal to chat_id={chat_id}")
+            if len(message) > 4000:
+                chunks = _split_message(message)
+                for chunk in chunks:
+                    await context.bot.send_message(chat_id=chat_id, text=chunk)
+            else:
+                await context.bot.send_message(chat_id=chat_id, text=message)
+
+            logger.info(f"Sent {session} quantum signal to chat_id={chat_id}")
 
         except Exception as e:
-            logger.error(f"Failed to send FX signal to chat_id={chat_id}: {e}")
+            logger.error(f"Failed to send quantum signal to chat_id={chat_id}: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -362,14 +363,36 @@ def setup_scheduler(app: Application):
     )
     logger.info("Scheduled: Evening market update at 18:00 WIB")
 
-    # ── Daily FX Signal (08:00 WIB - after Asian session open) ──
-    fx_signal_time = time(hour=8, minute=0, tzinfo=tz)
+    # ── Quantum FX Signals (3x/day — per session) ──
+    # Asian session signal (08:00 WIB)
+    asian_signal_time = time(hour=8, minute=0, tzinfo=tz)
     app.job_queue.run_daily(
-        send_daily_fx_signal,
-        time=fx_signal_time,
-        name="daily_fx_signal",
+        send_quantum_fx_signal,
+        time=asian_signal_time,
+        name="quantum_signal_asian",
+        data="asian",
     )
-    logger.info("Scheduled: Daily FX signal at 08:00 WIB")
+    logger.info("Scheduled: Quantum FX signal (Asian) at 08:00 WIB")
+
+    # London session signal (15:00 WIB)
+    london_signal_time = time(hour=15, minute=0, tzinfo=tz)
+    app.job_queue.run_daily(
+        send_quantum_fx_signal,
+        time=london_signal_time,
+        name="quantum_signal_london",
+        data="london",
+    )
+    logger.info("Scheduled: Quantum FX signal (London) at 15:00 WIB")
+
+    # New York session signal (20:00 WIB)
+    ny_signal_time = time(hour=20, minute=30, tzinfo=tz)
+    app.job_queue.run_daily(
+        send_quantum_fx_signal,
+        time=ny_signal_time,
+        name="quantum_signal_newyork",
+        data="newyork",
+    )
+    logger.info("Scheduled: Quantum FX signal (New York) at 20:30 WIB")
 
     # ── Session Updates ──
     # Asian session open (07:00 WIB = 00:00 UTC)
