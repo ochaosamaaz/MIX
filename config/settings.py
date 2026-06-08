@@ -18,6 +18,9 @@ class Settings:
     # News APIs
     NEWSAPI_KEY: str = os.getenv("NEWSAPI_KEY", "")
 
+    # Twelve Data API (for real OHLC price data)
+    TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
+
     # Scheduler
     TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Jakarta")
 

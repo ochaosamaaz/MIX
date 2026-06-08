@@ -1,9 +1,6 @@
 """
 Pivot Point Calculator module.
-Calculates Daily Pivot Points, Support (S1, S2, S3), and Resistance (R1, R2, R3)
-using the Standard (Floor) Pivot method.
-
-Formula:
+Fetches REAL OHLC data from Twelve Data API and calculates:
   Pivot (P) = (High + Low + Close) / 3
   R1 = (2 * P) - Low
   S1 = (2 * P) - High
@@ -14,31 +11,72 @@ Formula:
 """
 
 import logging
-from datetime import datetime, timedelta
 
 import httpx
 
-from openai import AsyncOpenAI
 from config import settings
 
 logger = logging.getLogger(__name__)
 
+TWELVE_DATA_BASE = "https://api.twelvedata.com"
+
+# Map pair names to Twelve Data symbols
+PAIR_SYMBOL_MAP = {
+    "EUR/USD": "EUR/USD",
+    "GBP/USD": "GBP/USD",
+    "USD/JPY": "USD/JPY",
+    "AUD/USD": "AUD/USD",
+    "USD/CHF": "USD/CHF",
+    "NZD/USD": "NZD/USD",
+    "USD/CAD": "USD/CAD",
+    "EUR/GBP": "EUR/GBP",
+    "EUR/JPY": "EUR/JPY",
+    "GBP/JPY": "GBP/JPY",
+    "AUD/JPY": "AUD/JPY",
+    "EUR/AUD": "EUR/AUD",
+    "XAU/USD": "XAU/USD",
+    "XAUUSD": "XAU/USD",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "AUDUSD": "AUD/USD",
+    "USDCHF": "USD/CHF",
+    "NZDUSD": "NZD/USD",
+    "USDCAD": "USD/CAD",
+    "EURGBP": "EUR/GBP",
+    "EURJPY": "EUR/JPY",
+    "GBPJPY": "GBP/JPY",
+    "AUDJPY": "AUD/JPY",
+    "EURAUD": "EUR/AUD",
+}
+
 
 async def get_pivot_points(pair: str) -> dict:
     """
-    Calculate daily pivot points for a given forex pair.
-    Uses previous day's High, Low, Close + Open comparison.
+    Calculate daily pivot points for a given forex pair using REAL data from Twelve Data.
+
+    Args:
+        pair: Currency pair (e.g., "XAU/USD", "EURUSD", "EUR/USD")
 
     Returns:
         Dict with pivot levels, PDH, PDL, open, prev_open
     """
-    pair_clean = pair.upper().replace("/", "")
+    # Normalize pair name
+    pair_upper = pair.upper().replace("/", "")
+    symbol = PAIR_SYMBOL_MAP.get(pair.upper(), PAIR_SYMBOL_MAP.get(pair_upper))
+
+    if not symbol:
+        # Try to format as XXX/YYY
+        if len(pair_upper) == 6:
+            symbol = f"{pair_upper[:3]}/{pair_upper[3:]}"
+        else:
+            symbol = pair.upper()
 
     try:
-        ohlc = await _fetch_ohlc_data(pair_clean)
+        ohlc = await _fetch_ohlc_twelvedata(symbol)
 
         if not ohlc or ohlc.get("error"):
-            return {"error": True, "message": f"Cannot fetch OHLC for {pair}"}
+            return {"error": True, "message": f"Cannot fetch OHLC for {pair}: {ohlc.get('message', 'Unknown error')}"}
 
         high = ohlc["high"]
         low = ohlc["low"]
@@ -60,7 +98,7 @@ async def get_pivot_points(pair: str) -> dict:
         pdl = low
 
         return {
-            "pair": pair,
+            "pair": pair if "/" in pair else f"{pair_upper[:3]}/{pair_upper[3:]}",
             "open": round(open_price, 5),
             "prev_open": round(prev_open, 5),
             "high": round(high, 5),
@@ -83,85 +121,71 @@ async def get_pivot_points(pair: str) -> dict:
         return {"error": True, "message": str(e)}
 
 
-async def _fetch_ohlc_data(pair: str) -> dict:
+async def _fetch_ohlc_twelvedata(symbol: str) -> dict:
     """
-    Fetch previous day OHLC data using AI estimation.
-    For production, replace with a proper OHLC API (e.g., Twelve Data, OANDA).
+    Fetch previous day and day-before OHLC data from Twelve Data API.
+
+    Returns:
+        Dict with open, high, low, close (previous day) and prev_open (2 days ago)
     """
-    return await _ai_estimate_ohlc(pair)
+    api_key = settings.TWELVE_DATA_API_KEY
 
-
-async def _ai_estimate_ohlc(pair: str) -> dict:
-    """
-    Use AI to provide current realistic OHLC data for pivot calculation.
-    """
-    client = AsyncOpenAI(
-        api_key=settings.OPENAI_API_KEY,
-        base_url=settings.OPENAI_BASE_URL,
-    )
-
-    formatted_pair = f"{pair[:3]}/{pair[3:]}"
-
-    prompt = f"""You are a forex market data provider. Provide the PREVIOUS TRADING DAY's OHLC candle data for {formatted_pair}, and also the OPEN price from 2 days ago.
-
-Return ONLY these numbers in this exact format (no other text, no explanation):
-OPEN: <price>
-HIGH: <price>
-LOW: <price>
-CLOSE: <price>
-PREV_OPEN: <open price from 2 days ago>
-
-Rules:
-- Use realistic CURRENT market prices (as of today)
-- Be precise: 5 decimal places for most pairs, 3 for JPY pairs, 2 for XAUUSD
-- HIGH must be the highest, LOW must be the lowest
-- OPEN and CLOSE must be between HIGH and LOW"""
+    if not api_key:
+        logger.error("TWELVE_DATA_API_KEY not configured!")
+        return {"error": True, "message": "Twelve Data API key not configured."}
 
     try:
-        response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": "You provide accurate forex OHLC data. Return only numbers, no explanations."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-            max_tokens=100,
-        )
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Get last 2 daily candles
+            response = await client.get(
+                f"{TWELVE_DATA_BASE}/time_series",
+                params={
+                    "symbol": symbol,
+                    "interval": "1day",
+                    "outputsize": 2,
+                    "apikey": api_key,
+                    "order": "desc",
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
 
-        content = response.choices[0].message.content.strip()
-        return _parse_ohlc_response(content)
+            # Check for API errors
+            if data.get("status") == "error" or "code" in data:
+                error_msg = data.get("message", "Unknown Twelve Data error")
+                logger.error(f"Twelve Data API error for {symbol}: {error_msg}")
+                return {"error": True, "message": error_msg}
 
+            values = data.get("values", [])
+
+            if not values or len(values) < 1:
+                return {"error": True, "message": f"No OHLC data available for {symbol}"}
+
+            # values[0] = most recent completed day (yesterday)
+            # values[1] = day before (2 days ago) — for prev_open comparison
+            latest = values[0]
+            prev_day = values[1] if len(values) > 1 else values[0]
+
+            result = {
+                "open": float(latest["open"]),
+                "high": float(latest["high"]),
+                "low": float(latest["low"]),
+                "close": float(latest["close"]),
+                "prev_open": float(prev_day["open"]),
+                "error": False,
+            }
+
+            logger.info(
+                f"Twelve Data OHLC for {symbol}: "
+                f"O={result['open']} H={result['high']} L={result['low']} C={result['close']} "
+                f"PrevO={result['prev_open']}"
+            )
+
+            return result
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error fetching Twelve Data for {symbol}: {e}")
+        return {"error": True, "message": f"HTTP error: {e.response.status_code}"}
     except Exception as e:
-        logger.error(f"AI OHLC estimation failed for {pair}: {e}")
-        return {"error": True}
-
-
-def _parse_ohlc_response(text: str) -> dict:
-    """Parse AI OHLC response into dict."""
-    result = {}
-    for line in text.strip().split("\n"):
-        if ":" not in line:
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip().upper().replace(" ", "_")
-        try:
-            val = float(value.strip())
-            if key == "OPEN":
-                result["open"] = val
-            elif key == "HIGH":
-                result["high"] = val
-            elif key == "LOW":
-                result["low"] = val
-            elif key == "CLOSE":
-                result["close"] = val
-            elif key == "PREV_OPEN":
-                result["prev_open"] = val
-        except ValueError:
-            continue
-
-    if "open" in result and "high" in result and "low" in result and "close" in result:
-        if "prev_open" not in result:
-            result["prev_open"] = result["open"]
-        return result
-
-    return {"error": True}
+        logger.error(f"Error fetching Twelve Data OHLC for {symbol}: {e}")
+        return {"error": True, "message": str(e)}
