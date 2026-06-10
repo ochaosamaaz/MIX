@@ -1,6 +1,6 @@
 """
 US Stocks news fetcher.
-Uses NewsAPI for stock market news.
+Uses NewsAPI for stock market news with proper filtering.
 """
 
 import logging
@@ -17,6 +17,14 @@ NEWSAPI_BASE = "https://newsapi.org/v2"
 # Major US indices and popular stocks to track
 TRACKED_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META"]
 
+# Stock-specific query
+STOCKS_QUERY = (
+    '"stock market" OR "S&P 500" OR "Nasdaq" OR "Wall Street" '
+    'OR "Dow Jones" OR "earnings" OR "NYSE" '
+    'OR "AAPL" OR "MSFT" OR "NVDA" OR "TSLA" '
+    'OR "Russell 2000" OR "market rally" OR "bull market" OR "bear market"'
+)
+
 
 async def fetch_stocks_news(limit: int = 5) -> dict:
     """
@@ -31,12 +39,9 @@ async def fetch_stocks_news(limit: int = 5) -> dict:
             response = await client.get(
                 f"{NEWSAPI_BASE}/everything",
                 params={
-                    "q": (
-                        "stock market OR Wall Street OR S&P 500 OR NASDAQ "
-                        "OR earnings OR NYSE"
-                    ),
+                    "q": STOCKS_QUERY,
                     "from": yesterday,
-                    "sortBy": "publishedAt",
+                    "sortBy": "relevancy",
                     "language": "en",
                     "pageSize": limit,
                     "apiKey": settings.NEWSAPI_KEY,
