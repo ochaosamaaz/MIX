@@ -17,6 +17,7 @@ from scheduler.signal_monitor import add_active_signal, check_signals
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update
 from ai.llm import summarize_news, analyze_sentiment, format_sentiment_message
+from utils import split_message as _split_message
 from scheduler.channel import (
     channel_morning_update,
     channel_evening_update,
@@ -323,23 +324,6 @@ async def evening_update(context: ContextTypes.DEFAULT_TYPE):
 # ─────────────────────────────────────────────
 # Helper
 # ─────────────────────────────────────────────
-def _split_message(text: str, max_length: int = 4000) -> list[str]:
-    """Split a long message into chunks."""
-    if len(text) <= max_length:
-        return [text]
-
-    chunks = []
-    while text:
-        if len(text) <= max_length:
-            chunks.append(text)
-            break
-        split_point = text.rfind("\n", 0, max_length)
-        if split_point == -1:
-            split_point = max_length
-        chunks.append(text[:split_point])
-        text = text[split_point:].lstrip("\n")
-
-    return chunks
 
 
 # ─────────────────────────────────────────────

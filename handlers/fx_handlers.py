@@ -17,6 +17,7 @@ from fetchers.fx_signals import generate_quantum_signal, generate_pair_quantum_s
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update, get_all_sessions_summary
 from handlers.commands import get_lang
+from utils import split_message as _split_message
 
 logger = logging.getLogger(__name__)
 
@@ -354,31 +355,6 @@ async def fx_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # ─────────────────────────────────────────────
-# Helper functions
-# ─────────────────────────────────────────────
-def _split_message(text: str, max_length: int = 4000) -> list[str]:
-    """Split a long message into chunks that fit Telegram's limit."""
-    if len(text) <= max_length:
-        return [text]
-
-    chunks = []
-    while text:
-        if len(text) <= max_length:
-            chunks.append(text)
-            break
-
-        # Find a good split point (newline)
-        split_point = text.rfind("\n", 0, max_length)
-        if split_point == -1:
-            split_point = max_length
-
-        chunks.append(text[:split_point])
-        text = text[split_point:].lstrip("\n")
-
-    return chunks
-
-
-# ─────────────────────────────────────────────
 # Register FX handlers
 # ─────────────────────────────────────────────
 def register_fx_handlers(app: Application):
@@ -388,6 +364,6 @@ def register_fx_handlers(app: Application):
     app.add_handler(CommandHandler("review", review_command))
     app.add_handler(CommandHandler("session", session_command))
     app.add_handler(CommandHandler("weekly", weekly_command))
-    app.add_handler(CallbackQueryHandler(fx_button_callback, pattern="^fx_"))
+    app.add_handler(CallbackQueryHandler(fx_button_callback, pattern="^(fx_|qsig_)"))
 
     logger.info("FX trading handlers registered successfully.")

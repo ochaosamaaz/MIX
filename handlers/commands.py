@@ -1113,6 +1113,12 @@ def register_handlers(app: Application):
     app.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("tutorial", tutorial_command))
-    app.add_handler(CallbackQueryHandler(button_callback))
+
+    # IMPORTANT: Register callback handler EXCLUDING fx_ and qsig_ patterns
+    # Those are handled by fx_handlers.py which is registered separately
+    app.add_handler(CallbackQueryHandler(
+        button_callback,
+        pattern="^(?!fx_|qsig_).*$"
+    ))
 
     logger.info("All handlers registered successfully.")

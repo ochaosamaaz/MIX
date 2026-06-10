@@ -55,3 +55,22 @@ class Settings:
         if not self.NEWSAPI_KEY:
             missing.append("NEWSAPI_KEY")
         return missing
+
+    def get_warnings(self) -> list[str]:
+        """Check for optional but recommended settings. Returns list of warnings."""
+        warnings = []
+        if not self.TWELVE_DATA_API_KEY:
+            warnings.append(
+                "TWELVE_DATA_API_KEY not set — FX signals, pivot points, and session "
+                "updates will use AI estimation (less accurate). "
+                "Get a free key at: https://twelvedata.com/"
+            )
+        if not self.CHANNEL_ID:
+            warnings.append(
+                "CHANNEL_ID not set — Auto-posting to channel is disabled."
+            )
+        if not self.FORCE_JOIN_CHANNEL:
+            warnings.append(
+                "FORCE_JOIN_CHANNEL not set — Force join is disabled (anyone can use the bot)."
+            )
+        return warnings

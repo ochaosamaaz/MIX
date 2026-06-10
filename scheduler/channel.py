@@ -13,6 +13,7 @@ from fetchers.fx_signals import generate_quantum_signal, format_quantum_signal
 from fetchers.us_news import get_upcoming_events, get_news_review, get_weekly_analysis
 from fetchers.sessions import get_session_update, get_all_sessions_summary
 from ai.llm import summarize_news, analyze_sentiment, format_sentiment_message
+from utils import split_message as _split_message
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +253,6 @@ async def channel_weekly_analysis(context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Error posting weekly analysis to channel: {e}")
-
 
 # ─────────────────────────────────────────────
 # Helper

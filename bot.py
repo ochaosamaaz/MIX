@@ -8,15 +8,13 @@ import asyncio
 import logging
 import signal
 
-from telegram import Bot, Update
-from telegram.ext import Application, ApplicationBuilder, BaseHandler
+from telegram.ext import Application, ApplicationBuilder
 
 from config import settings
 from handlers import register_handlers
 from handlers.fx_handlers import register_fx_handlers
 from handlers.ask_handler import register_ask_handler
 from handlers.risk_calculator import register_risk_handler
-from handlers.force_join import check_force_join
 from scheduler import setup_scheduler
 
 # Configure logging
@@ -35,6 +33,11 @@ async def main():
         logger.error(f"Missing required environment variables: {', '.join(missing)}")
         logger.error("Please copy .env.example to .env and fill in the values.")
         return
+
+    # Show warnings for optional settings
+    warnings = settings.get_warnings()
+    for warning in warnings:
+        logger.warning(f"⚠️  {warning}")
 
     logger.info("Starting AI Market News Bot...")
 

@@ -16,6 +16,7 @@ from openai import AsyncOpenAI
 from config import settings
 from fetchers import fetch_crypto_news, fetch_forex_news
 from handlers.commands import get_lang
+from utils import split_message as _split_message
 
 logger = logging.getLogger(__name__)
 
@@ -153,23 +154,6 @@ async def _get_market_context() -> str:
         logger.error(f"Error getting market context for /ask: {e}")
 
     return "\n".join(context_parts) if context_parts else "No recent context available."
-
-
-def _split_message(text: str, max_length: int = 4000) -> list[str]:
-    """Split a long message into chunks."""
-    if len(text) <= max_length:
-        return [text]
-    chunks = []
-    while text:
-        if len(text) <= max_length:
-            chunks.append(text)
-            break
-        split_point = text.rfind("\n", 0, max_length)
-        if split_point == -1:
-            split_point = max_length
-        chunks.append(text[:split_point])
-        text = text[split_point:].lstrip("\n")
-    return chunks
 
 
 def register_ask_handler(app: Application):
